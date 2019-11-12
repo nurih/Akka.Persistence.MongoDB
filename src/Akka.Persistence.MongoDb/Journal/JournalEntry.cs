@@ -5,6 +5,7 @@
 // </copyright>
 //-----------------------------------------------------------------------
 
+using Akka.Persistence.MongoDb.Snapshot;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 using System.Collections.Generic;
@@ -18,13 +19,13 @@ namespace Akka.Persistence.MongoDb.Journal
     public class JournalEntry
     {
         [BsonId]
-        public string Id { get; set; }
+        public EntryId Id { get; set; }
 
-        [BsonElement("PersistenceId")]
-        public string PersistenceId { get; set; }
+        [BsonIgnore]
+        public string PersistenceId => Id.PersistenceId;
 
-        [BsonElement("SequenceNr")]
-        public long SequenceNr { get; set; }
+        [BsonIgnore]
+        public long SequenceNr => Id.SequenceNr;
 
         [BsonElement("IsDeleted")]
         public bool IsDeleted { get; set; }

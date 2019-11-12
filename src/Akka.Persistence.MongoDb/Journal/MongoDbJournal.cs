@@ -21,6 +21,7 @@ using MongoDB.Bson;
 using Akka.Serialization;
 using Akka.Util;
 using MongoDB.Driver;
+using Akka.Persistence.MongoDb.Snapshot;
 
 namespace Akka.Persistence.MongoDb.Journal
 {
@@ -72,8 +73,8 @@ namespace Akka.Persistence.MongoDb.Journal
                 {
                     var modelForEntryAndSequenceNr = new CreateIndexModel<JournalEntry>(Builders<JournalEntry>
                         .IndexKeys
-                        .Ascending(entry => entry.PersistenceId)
-                        .Descending(entry => entry.SequenceNr));
+                        .Ascending(entry => entry.Id.PersistenceId)
+                        .Descending(entry => entry.Id.SequenceNr));
 
                     collection.Indexes
                         .CreateOneAsync(modelForEntryAndSequenceNr, cancellationToken: CancellationToken.None)
@@ -123,13 +124,13 @@ namespace Akka.Persistence.MongoDb.Journal
                 return;
 
             var builder = Builders<JournalEntry>.Filter;
-            var filter = builder.Eq(x => x.PersistenceId, persistenceId);
+            var filter = builder.Eq(x => x.Id.PersistenceId, persistenceId);
             if (fromSequenceNr > 0)
-                filter &= builder.Gte(x => x.SequenceNr, fromSequenceNr);
+                filter &= builder.Gte(x => x.Id.SequenceNr, fromSequenceNr);
             if (toSequenceNr != long.MaxValue)
-                filter &= builder.Lte(x => x.SequenceNr, toSequenceNr);
+                filter &= builder.Lte(x => x.Id.SequenceNr, toSequenceNr);
 
-            var sort = Builders<JournalEntry>.Sort.Ascending(x => x.SequenceNr);
+            var sort = Builders<JournalEntry>.Sort.Ascending(x => x.Id.SequenceNr);
 
             var collections = await _journalCollection.Value
                 .Find(filter)
@@ -274,10 +275,10 @@ namespace Akka.Persistence.MongoDb.Journal
             NotifyNewPersistenceIdAdded(persistenceId);
 
             var builder = Builders<JournalEntry>.Filter;
-            var filter = builder.Eq(x => x.PersistenceId, persistenceId);
+            var filter = builder.Eq(x => x.Id.PersistenceId, persistenceId);
 
             if (toSequenceNr != long.MaxValue)
-                filter &= builder.Lte(x => x.SequenceNr, toSequenceNr);
+                filter &= builder.Lte(x => x.Id.SequenceNr, toSequenceNr);
 
             return _journalCollection.Value.DeleteManyAsync(filter);
         }
@@ -298,12 +299,10 @@ namespace Akka.Persistence.MongoDb.Journal
 
             return new JournalEntry
             {
-                Id = message.PersistenceId + "_" + message.SequenceNr,
+                Id = new EntryId() { PersistenceId = message.PersistenceId, SequenceNr = message.SequenceNr },
                 Ordering = new BsonTimestamp(0), // Auto-populates with timestamp
                 IsDeleted = message.IsDeleted,
                 Payload = binary,
-                PersistenceId = message.PersistenceId,
-                SequenceNr = message.SequenceNr,
                 Manifest = string.Empty, // don't need a manifest here - it's embedded inside the PersistentMessage
                 Tags = tagged.Tags?.ToList(),
                 SerializerId = null // don't need a serializer ID here either; only for backwards-comat
@@ -424,7 +423,7 @@ namespace Akka.Persistence.MongoDb.Journal
         private IEnumerable<string> GetAllPersistenceIds()
         {
             return _journalCollection.Value.AsQueryable()
-                .Select(je => je.PersistenceId)
+                .Select(je => je.Id.PersistenceId)
                 .Distinct()
                 .ToList();
         }

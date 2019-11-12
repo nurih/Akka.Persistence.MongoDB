@@ -46,17 +46,7 @@ namespace Akka.Persistence.MongoDb.Snapshot
                 var snapshot = client.GetDatabase(connectionString.DatabaseName);
 
                 var collection = snapshot.GetCollection<SnapshotEntry>(_settings.Collection);
-                if (_settings.AutoInitialize)
-                {
-                    var modelWithAscendingPersistenceIdAndDescendingSequenceNr = new CreateIndexModel<SnapshotEntry>(Builders<SnapshotEntry>.IndexKeys
-                        .Ascending(entry => entry.PersistenceId)
-                        .Descending(entry => entry.SequenceNr));
-
-                    collection.Indexes
-                        .CreateOneAsync(modelWithAscendingPersistenceIdAndDescendingSequenceNr, cancellationToken: CancellationToken.None)
-                        .Wait();
-                }
-
+      
                 return collection;
             });
         }
@@ -68,7 +58,7 @@ namespace Akka.Persistence.MongoDb.Snapshot
             return
                 _snapshotCollection.Value
                     .Find(filter)
-                    .SortByDescending(x => x.SequenceNr)
+                    .SortByDescending(x => x.Id.SequenceNr)
                     .Limit(1)
                     .Project(x => ToSelectedSnapshot(x))
                     .FirstOrDefaultAsync();
@@ -87,10 +77,10 @@ namespace Akka.Persistence.MongoDb.Snapshot
         protected override Task DeleteAsync(SnapshotMetadata metadata)
         {
             var builder = Builders<SnapshotEntry>.Filter;
-            var filter = builder.Eq(x => x.PersistenceId, metadata.PersistenceId);
+            var filter = builder.Eq(x => x.Id.PersistenceId, metadata.PersistenceId);
 
             if (metadata.SequenceNr > 0 && metadata.SequenceNr < long.MaxValue)
-                filter &= builder.Eq(x => x.SequenceNr, metadata.SequenceNr);
+                filter &= builder.Eq(x => x.Id.SequenceNr, metadata.SequenceNr);
 
             if (metadata.Timestamp != DateTime.MinValue && metadata.Timestamp != DateTime.MaxValue)
                 filter &= builder.Eq(x => x.Timestamp, metadata.Timestamp.Ticks);
@@ -105,7 +95,7 @@ namespace Akka.Persistence.MongoDb.Snapshot
             return _snapshotCollection.Value.DeleteManyAsync(filter);
         }
 
-        private static FilterDefinition<SnapshotEntry> CreateSnapshotIdFilter(string snapshotId)
+        private static FilterDefinition<SnapshotEntry> CreateSnapshotIdFilter(EntryId snapshotId)
         {
             var builder = Builders<SnapshotEntry>.Filter;
 
@@ -117,10 +107,10 @@ namespace Akka.Persistence.MongoDb.Snapshot
         private static FilterDefinition<SnapshotEntry> CreateRangeFilter(string persistenceId, SnapshotSelectionCriteria criteria)
         {
             var builder = Builders<SnapshotEntry>.Filter;
-            var filter = builder.Eq(x => x.PersistenceId, persistenceId);
+            var filter = builder.Eq(x => x.Id.PersistenceId, persistenceId);
 
             if (criteria.MaxSequenceNr > 0 && criteria.MaxSequenceNr < long.MaxValue)
-                filter &= builder.Lte(x => x.SequenceNr, criteria.MaxSequenceNr);
+                filter &= builder.Lte(x => x.Id.SequenceNr, criteria.MaxSequenceNr);
 
             if (criteria.MaxTimeStamp != DateTime.MinValue && criteria.MaxTimeStamp != DateTime.MaxValue)
                 filter &= builder.Lte(x => x.Timestamp, criteria.MaxTimeStamp.Ticks);
@@ -142,9 +132,7 @@ namespace Akka.Persistence.MongoDb.Snapshot
 
             return new SnapshotEntry
             {
-                Id = metadata.PersistenceId + "_" + metadata.SequenceNr,
-                PersistenceId = metadata.PersistenceId,
-                SequenceNr = metadata.SequenceNr,
+                Id = new EntryId { PersistenceId = metadata.PersistenceId, SequenceNr = metadata.SequenceNr },
                 Snapshot = binary,
                 Timestamp = metadata.Timestamp.Ticks,
                 Manifest = manifest,
@@ -160,7 +148,7 @@ namespace Akka.Persistence.MongoDb.Snapshot
             {
                 var ser = _serialization.FindSerializerForType(typeof(Serialization.Snapshot));
                 var snapshot = ser.FromBinary<Serialization.Snapshot>((byte[])entry.Snapshot);
-                return new SelectedSnapshot(new SnapshotMetadata(entry.PersistenceId, entry.SequenceNr), snapshot.Data);
+                return new SelectedSnapshot(new SnapshotMetadata(entry.Id.PersistenceId, entry.Id.SequenceNr), snapshot.Data);
             }
 
             int? serializerId = null;
@@ -188,15 +176,15 @@ namespace Akka.Persistence.MongoDb.Snapshot
 
                 if (deserialized is Serialization.Snapshot snap)
                     return new SelectedSnapshot(
-                        new SnapshotMetadata(entry.PersistenceId, entry.SequenceNr, new DateTime(entry.Timestamp)), snap.Data);
+                        new SnapshotMetadata(entry.Id.PersistenceId, entry.Id.SequenceNr, new DateTime(entry.Timestamp)), snap.Data);
 
                 return new SelectedSnapshot(
-                    new SnapshotMetadata(entry.PersistenceId, entry.SequenceNr, new DateTime(entry.Timestamp)), deserialized);
+                    new SnapshotMetadata(entry.Id.PersistenceId, entry.Id.SequenceNr, new DateTime(entry.Timestamp)), deserialized);
             }
 
             // backwards compat - loaded an old snapshot using BSON serialization. No need to deserialize via Akka.NET
             return new SelectedSnapshot(
-                new SnapshotMetadata(entry.PersistenceId, entry.SequenceNr, new DateTime(entry.Timestamp)), entry.Snapshot);
+                new SnapshotMetadata(entry.Id.PersistenceId, entry.Id.SequenceNr, new DateTime(entry.Timestamp)), entry.Snapshot);
         }
     }
 }

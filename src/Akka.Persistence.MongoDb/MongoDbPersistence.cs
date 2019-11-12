@@ -8,6 +8,8 @@
 using System;
 using Akka.Actor;
 using Akka.Configuration;
+using Akka.Persistence.MongoDb.Journal;
+using Akka.Persistence.MongoDb.Snapshot;
 using MongoDB.Bson.Serialization;
 
 namespace Akka.Persistence.MongoDb
@@ -22,6 +24,9 @@ namespace Akka.Persistence.MongoDb
             // Some MongoDB things are statically configured.
 
             // Register our own serializer for objects that uses the type's FullName + Assembly for the discriminator
+            BsonClassMap.RegisterClassMap<SnapshotEntry>(d => d.AutoMap());
+            BsonClassMap.RegisterClassMap<JournalEntry>(d => d.AutoMap());
+
             BsonSerializer.RegisterSerializer(typeof(object), new FullTypeNameObjectSerializer());
         }
         /// <summary>

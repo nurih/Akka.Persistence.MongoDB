@@ -15,13 +15,13 @@ namespace Akka.Persistence.MongoDb.Snapshot
     public class SnapshotEntry
     {
         [BsonId]
-        public string Id { get; set; }
+        public EntryId Id { get; set; }
 
-        [BsonElement("PersistenceId")]
-        public string PersistenceId { get; set; }
+        [BsonIgnore()]
+        public string PersistenceId => Id.PersistenceId;
 
-        [BsonElement("SequenceNr")]
-        public long SequenceNr { get; set; }
+        [BsonIgnore()]
+        public long SequenceNr => Id.SequenceNr;
 
         [BsonElement("Timestamp")]
         public long Timestamp { get; set; }
@@ -35,4 +35,5 @@ namespace Akka.Persistence.MongoDb.Snapshot
         [BsonElement("SerializerId")]
         public int? SerializerId { get; set; }
     }
+
 }

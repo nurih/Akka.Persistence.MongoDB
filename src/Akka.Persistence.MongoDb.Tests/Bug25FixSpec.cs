@@ -74,10 +74,10 @@ namespace Akka.Persistence.MongoDb.Tests
             var records = _database.Value.GetCollection<JournalEntry>("EventJournal");
 
             var builder = Builders<JournalEntry>.Filter;
-            var filter = builder.Eq(x => x.PersistenceId, persistenceId);
-            filter &= builder.Eq(x => x.SequenceNr, 1);
+            var filter = builder.Eq(x => x.Id.PersistenceId, persistenceId);
+            filter &= builder.Eq(x => x.Id.SequenceNr, 1);
 
-            var sort = Builders<JournalEntry>.Sort.Ascending(x => x.SequenceNr);
+            var sort = Builders<JournalEntry>.Sort.Ascending(x => x.Id.SequenceNr);
             
             AwaitCondition(() => records.CountDocuments(filter) > 0);
             var collections = await records
